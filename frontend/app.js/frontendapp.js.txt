@@ -1,0 +1,110 @@
+const API = "https://key-rack-app.onrender.com";
+
+let editingId = null;
+
+// Load keys on start
+loadKeys();
+
+function loadKeys() {
+  fetch(`${API}/keys`)
+    .then(r => r.json())
+    .then(keys => {
+      const search = document.getElementById("searchBox").value.toLowerCase();
+      const list = keys.filter(k => k.name.toLowerCase().includes(search));
+
+      document.getElementById("results").innerHTML = list.map(k => `
+        <div>
+          <strong>${k.name}</strong> — ${k.board}, row ${k.row}, col ${k.column}
+          ${k.photo ? `<br><img src="${API.replace('/api','')}/photos/${k.photo}" height="50">` : ""}
+          <br>
+          <button onclick="editKey(${k.id})">Edit</button>
+          <button onclick="deleteKey(${k.id})">Delete</button>
+        </div>
+      `).join("");
+    });
+}
+
+document.getElementById("searchBox").oninput = loadKeys;
+
+// Add new key
+function openAddForm() {
+  editingId = null;
+  document.getElementById("formTitle").innerText = "Add New Key";
+  document.getElementById("formContainer").classList.remove("hidden");
+}
+
+// Edit key
+function editKey(id) {
+  fetch(`${API}/keys`)
+    .then(r => r.json())
+    .then(keys => {
+      const k = keys.find(x => x.id === id);
+      if (!k) return;
+
+      editingId = id;
+
+      document.getElementById("formTitle").innerText = "Edit Key";
+      document.getElementById("keyName").value = k.name;
+      document.getElementById("boardSelect").value = k.board;
+      document.getElementById("rowInput").value = k.row;
+      document.getElementById("colInput").value = k.column;
+
+      document.getElementById("formContainer").classList.remove("hidden");
+    });
+}
+
+// Save key
+async function saveKey() {
+  let photoFilename = null;
+
+  const photoFile = document.getElementById("photoInput").files[0];
+  if (photoFile) {
+    const form = new FormData();
+    form.append("photo", photoFile);
+
+    const upload = await fetch(`${API}/photos`, {
+      method: "POST",
+      body: form
+    });
+
+    const res = await upload.json();
+    photoFilename = res.filename;
+  }
+
+  const body = {
+    name: document.getElementById("keyName").value,
+    board: document.getElementById("boardSelect").value,
+    row: parseInt(document.getElementById("rowInput").value),
+    column: parseInt(document.getElementById("colInput").value),
+    photo: photoFilename
+  };
+
+  if (editingId) {
+    await fetch(`${API}/keys/${editingId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
+  } else {
+    await fetch(`${API}/keys`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
+  }
+
+  closeForm();
+  loadKeys();
+}
+
+function closeForm() {
+  document.getElementById("formContainer").classList.add("hidden");
+  document.getElementById("photoInput").value = "";
+}
+
+// Delete
+async function deleteKey(id) {
+  if (!confirm("Delete this key?")) return;
+  await fetch(`${API}/keys/${id}`, { method: "DELETE" });
+  loadKeys();
+}
